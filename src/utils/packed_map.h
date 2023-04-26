@@ -27,12 +27,14 @@ public:
   // 如果违反此约定，会发生未定义事件
   // 可以将upper_key_length设置为0，放弃更加高效的编码方式
   PackedMap(const uint8_t *lower_key, unsigned lower_key_length,
-            const uint8_t *upper_key, unsigned upper_ley_length);
+            const uint8_t *upper_key, unsigned upper_key_length);
 
   // 插入key和payload
   // 重复的key会覆盖payload
-  bool Insert(const uint8_t *key, unsigned key_length, const unsigned payload,
-              const unsigned payload_length);
+  //  bool Insert(const uint8_t *key, unsigned key_length, const unsigned
+  //  payload,
+  //              const unsigned payload_length);
+  uint16_t ShowLowerKeyOffset() { return header_.lower_fence.offset; }
 
 private:
   static constexpr unsigned kHintCount = 16;
@@ -69,7 +71,7 @@ private:
 
   Header header_;
   // 用于内存对齐，保证剩余空间能装下整个slot
-  uint8_t pending_[(MapSizeBytes - sizeof(Header) % sizeof(Slot))];
+  uint8_t pending_[((MapSizeBytes - sizeof(Header)) % sizeof(Slot))];
 
   static constexpr unsigned kTotalMetadataBytes =
       sizeof(Header) + sizeof(pending_);
@@ -79,14 +81,28 @@ private:
     // slot数组 从前向后增长
     Slot slot_[(MapSizeBytes - sizeof(Header)) / sizeof(Slot)];
     // 从后向前增长
-    uint8_t heap_[10];
-    l
+    uint8_t heap_[MapSizeBytes - kTotalMetadataBytes];
   };
 
   static_assert((MapSizeBytes - kTotalMetadataBytes) % sizeof(Slot) == 0);
 
   static_assert(MapSizeBytes > kTotalMetadataBytes,
                 "The PackedMap must be large enough to store its header");
+
+  uint8_t *Ptr();
+
+  const uint8_t *Ptr() const;
+
+  unsigned FreeSpace();
+
+  // insert fence key
+  // 虽然tuple从后向前插入,但是FenceKeySlot记录的key的Offset是从头开始计算的
+  // 而不是从末尾计算
+  void InsertFence(typename Header::FenceKeySlot &fk, const uint8_t *key,
+                   unsigned key_length);
+
+  void SetFence(const uint8_t *lower_key, unsigned lower_key_length,
+                const uint8_t *upper_key, unsigned upper_key_length);
 
 public:
   static constexpr size_t kMaxKeySizeByte =
@@ -96,5 +112,4 @@ public:
 };
 } // namespace di
 
-#include "packed_map.cc"
 #endif // DATABASE_INTERNAL_PACKED_MAP_H
